@@ -230,8 +230,16 @@ class Table
 			$list[] = $model;
 		}
 
-		if ($collect_attrs_for_includes && !empty($list))
-			$this->execute_eager_load($list, $attrs, $includes);
+		if(class_exists('\JDO\Relationship',false))
+		{
+			if ($collect_attrs_for_includes && !empty($list))
+				\JDO\Relationships::executeEagerLoad($this->class->name,$list,$includes);
+		}
+		else
+		{
+			if ($collect_attrs_for_includes && !empty($list))
+				$this->execute_eager_load($list, $attrs, $includes);
+		}
 
 		return $list;
 	}
