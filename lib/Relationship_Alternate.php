@@ -612,7 +612,7 @@ class ModelCacher
 		}
 	}
 }
-class JuggDataObjectException extends Exception{}
+class JuggDataObjectException extends \Exception{}
 class JDORelationshipException extends JuggDataObjectException{}
 class JDORelationshipNotDefinedException extends JDORelationshipException{
 	
