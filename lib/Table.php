@@ -229,11 +229,10 @@ class Table
 
 			$list[] = $model;
 		}
-
-		if(class_exists('\JDO\Relationship',false))
+		if(class_exists('\ActiveRecord\Relationships',false))
 		{
 			if ($collect_attrs_for_includes && !empty($list))
-				\JDO\Relationships::executeEagerLoad($this->class->name,$list,$includes);
+				Relationships::executeEagerLoad($this->class->name,$list,$includes);
 		}
 		else
 		{

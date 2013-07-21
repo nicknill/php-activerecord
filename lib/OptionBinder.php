@@ -16,7 +16,7 @@ class OptionBinder
 	/**
 	 * Determinates the valid aliases for the model
 	 */
-	private static $builder_scopes = array('where','joins','order', 'group', 'limit', 'offset', 'select', 'having', 'include');
+	private static $builder_scopes = array('where','joins','order', 'group', 'limit', 'offset', 'select', 'having', 'include','readonly');
 	
 	private static $merge_scopes = array('where','joins');
 	public static function get_builder_scopes()
@@ -116,10 +116,6 @@ class OptionBinder
 	 */
 	public function merge($options)
 	{
-		if(is_array($options) && isset($options['joins']) && $options['joins'] == 'LEFT JOIN user_stream_watching on user_stream_watching.chat_id = streams.id LEFT JOIN `stream_broadcasts` on `streams`.id = `stream_broadcasts`.stream')
-		{
-			throw new \Exception();
-		}
 		if($options instanceof OptionBinder)
 		{
 			$options = $options->get_options();

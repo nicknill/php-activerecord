@@ -1,5 +1,5 @@
 <?php
-namespace JDO;
+namespace ActiveRecord;
 class Relationships
 {
 	/**
@@ -50,13 +50,13 @@ class Relationships
 			{
 				$models = array($models);
 			}
-			foreach($models as $key=>$model)
+			foreach($models as $model_key=>$model)
 			{
-				$models[$key] = $model = ModelCacher::useCachedModel($model);
+				$models[$model_key] = $model = ModelCacher::useCachedModel($model);
 				$relationship = $model->hasRelationship($include);
 				//$relationship->setEagerRelationship($eagerRelationship);
 			}
-			$eagerRelationship = new EagerRelationship($class,$models,$nextLevelIncludes);
+			$eagerRelationship = new EagerRelationship($key,$class,$models,$nextLevelIncludes);
 			if(isset($relationship))
 			{
 				if(!$relationship)
@@ -107,7 +107,7 @@ class Relationships
 			$model = $this->model;
 			foreach($model::belongsTo() as $key=>$belongTo)
 			{
-				$relationArray[$key] = Relationship::createRelationship($this->model,$belongTo,Relationship::BELONGS_TO_ONE);
+				$relationArray[$key] = Relationship::createRelationship($key,$this->model,$belongTo,Relationship::BELONGS_TO_ONE);
 			}
 			$this->belongsTo = $relationArray;
 		}
@@ -121,7 +121,7 @@ class Relationships
 			$model = $this->model;
 			foreach($model::hasMany() as $key=>$hasMany)
 			{
-				$relationArray[$key] = Relationship::createRelationship($this->model,$hasMany,Relationship::HAS_MANY);
+				$relationArray[$key] = Relationship::createRelationship($key,$this->model,$hasMany,Relationship::HAS_MANY);
 			}
 			$this->hasMany = $relationArray;
 		}
@@ -135,7 +135,7 @@ class Relationships
 			$model = $this->model;
 			foreach($model::hasOne() as $key=>$hasOne)
 			{
-				$relationArray[$key] = Relationship::createRelationship($this->model,$hasOne,Relationship::HAS_ONE);
+				$relationArray[$key] = Relationship::createRelationship($key,$this->model,$hasOne,Relationship::HAS_ONE);
 			}
 			$this->hasOne = $relationArray;
 		}
@@ -164,6 +164,7 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 	public $model = null;
 	protected $loadedRelationship = null;
 	protected $eagerRelationship;
+	public $relationshipName = null;
 	
 	public $scope;
 	
@@ -171,11 +172,60 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 	const HAS_MANY = 2;
 	const HAS_ONE = 3;
 	
-	public function __construct($baseModel,$definition,$type)
+	public function __construct($name,$baseModel,$definition,$type)
 	{
 		$this->model = $baseModel;
 		$this->definedRelationship = $definition;
 		$this->type = $type;
+		$this->relationshipName = $name;
+		
+		if(!isset($this->definedRelationship['className']))
+			$this->set_inferred_class_name();
+		
+		if(!isset($this->definedRelationship['foreignKey']))
+		{
+			if($this->type == Relationship::BELONGS_TO_ONE)
+				$this->set_keys($this->definedRelationship['className']);
+			else
+				$this->set_keys(get_class($baseModel));
+			
+		}
+	}
+	
+	protected function set_keys($model_class_name, $override=false)
+	{
+		//infer from class_name
+		if (!isset($this->definedRelationship['foreignKey']) || $override)
+		{
+			$this->definedRelationship['foreignKey'] = array(Inflector::instance()->keyify($model_class_name));
+			$this->definedRelationship['foreignKey'] = $this->definedRelationship['foreignKey'][0];
+		}
+
+		if (!isset($this->definedRelationship['primaryKey']) || $override)
+		{
+			$this->definedRelationship['primaryKey'] = Table::load($model_class_name)->pk;
+			$this->definedRelationship['primaryKey'] = $this->definedRelationship['primaryKey'][0];
+		}
+	}
+	
+	protected function set_inferred_class_name()
+	{
+		$singularize = ($this->type == Relationship::HAS_MANY ? true : false);
+		$this->set_class_name(classify($this->relationshipName, $singularize));
+	}
+
+	protected function set_class_name($class_name)
+	{
+		if (!has_absolute_namespace($class_name) && isset($this->definedRelationship['namespace'])) {
+			$class_name = $this->definedRelationship['namespace'].'\\'.$class_name;
+		}
+		
+		$reflection = Reflections::instance()->add($class_name)->get($class_name);
+
+		if (!$reflection->isSubClassOf('\\ActiveRecord\\Model'))
+			throw new RelationshipException("'$class_name' must extend from ActiveRecord\\Model");
+
+		return $this->definedRelationship['className'] = $class_name;
 	}
 	
 	public function defineRelationship()
@@ -183,15 +233,15 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		return $this->definedRelationship;
 	}
 	
-	public static function createRelationship($baseModel,$definition,$type)
+	public static function createRelationship($keyName,$baseModel,$definition,$type)
 	{
 		if(isset($definition['through']))
 		{
-			return new ThroughRelationship($baseModel,$definition,$type);
+			return new ThroughRelationship($keyName,$baseModel,$definition,$type);
 		}
 		else
 		{
-			return new Relationship($baseModel,$definition,$type);
+			return new Relationship($keyName,$baseModel,$definition,$type);
 		}
 		
 	}
@@ -275,7 +325,7 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		{
 			return $this->usableReturnValue = $this->lazyLoadRelationship();
 		}
-		$scope = $this->establishScope();
+		$scope = $this->establishScope();   
 		$scope = clone $scope;
 		if($scope->exists())
 		{
@@ -342,19 +392,32 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		}
 		$definition = $this->definedRelationship;
 		
-		$class = $definition['className'];
+		if(isset($definition['className']))
+		{
+			$class = $definition['className'];
+		}
+		
 		$model = $this->model;
 		if(isset($definition['select']))
 			$options['select'] = $definition['select'];
 		if(isset($definition['order']))
 			$options['order'] = $definition['order'];
+		if(isset($definition['readonly']))
+			$options['readonly'] = $definition['readonly'];
+		if(isset($definition['conditions']))
+			$options['conditions'] = $definition['conditions'];
 		
 		if($this->type === self::BELONGS_TO_ONE)
 		{
-			$options['conditions'] = array(
+			$relationshipOptions['conditions'] = array(
 				$class::getPrimaryKeyField()=>$model->{$definition['foreignKey']}
 			);
-			return $this->scope = $class::scoped()->add_scope($options);
+			$scope = $class::scoped();
+			if(isset($options))
+			{
+				$scope = $scope->add_scope($options);
+			}
+			return $this->scope = $scope->add_scope($relationshipOptions);
 		}
 		if($this->type === self::HAS_MANY || $this->type === self::HAS_ONE)
 		{
@@ -362,10 +425,15 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 			{
 				throw new JDORelationshipException('Foreign Key not defined for this relationship');
 			}
-			$options['conditions'] = array(
+			$relationshipOptions['conditions'] = array(
 				$definition['foreignKey']=>$this->model->{$model::getPrimaryKeyField()}
 			);
-			return $this->scope = $class::scoped()->add_scope($options);
+			$scope = $class::scoped();
+			if(isset($options))
+			{
+				$scope = $scope->add_scope($options);
+			}
+			return $this->scope = $scope->add_scope($relationshipOptions);
 		}
 		throw new \Exception('Could not establish a scope for this type of relationship: '.$this->type);
 	}
@@ -463,6 +531,10 @@ class ThroughRelationship extends Relationship
 		$parentRelationship = $definition['through'];
 		
 		$relationship = $this->model->hasRelationship($definition['through']);
+		if(!$relationship)
+		{
+			throw new HasManyThroughAssociationException();
+		}
 		$models = $relationship->lazyLoadRelationship();
 		if(!is_array($models))
 		{
@@ -499,11 +571,12 @@ class EagerRelationship extends Relationship
 	protected $completedSession = false;
 	protected $results;
 	
-	public function __construct($class,$models,$includes)
+	public function __construct($name, $class,$models,$includes)
 	{
 		$this->class = $class;
 		$this->models = $models;
 		$this->includes = $includes;
+		$this->relationshipName = $name;
 		static::$eagerRelationships[] = $this;
 	}
 	
@@ -534,10 +607,12 @@ class EagerRelationship extends Relationship
 			$options['order'] = $definedRelationship['order'];
 		if(isset($definedRelationship['select']))
 			$options['select'] = $definedRelationship['select'];
+		if(isset($definedRelationship['readonly']))
+			$options['readonly'] = $definedRelationship['readonly'];
 		
 		if($sampleRelationship->type == self::HAS_MANY || $sampleRelationship->type == self::HAS_ONE)
 		{
-			$keys = \Arrays::list_elements_by_a_property($this->models, $class::getPrimaryKeyField());
+			$keys = Arrays::list_elements_by_a_property($this->models, $class::getPrimaryKeyField());
 			$keys = array_keys($keys);
 			
 			$options['conditions'] = array($definedRelationship['foreignKey'].' IN (?)',$keys);
@@ -565,7 +640,7 @@ class EagerRelationship extends Relationship
 		}
 		if($sampleRelationship->type == self::BELONGS_TO_ONE)
 		{
-			$keys = \Arrays::list_elements_by_a_property($this->models, $definedRelationship['foreignKey']);
+			$keys = Arrays::list_elements_by_a_property($this->models, $definedRelationship['foreignKey']);
 			$keys = array_keys($keys);
 			
 			$options['conditions'] = array($definedRelationship['className']::getPrimaryKeyField().' IN (?)',$keys);
@@ -633,4 +708,116 @@ class JDORelationshipNotDefinedException extends JDORelationshipException{
 	{
 		return "Relationship \"{$this->relationshipName}\" is not defined for ".$this->class;
 	}
+}
+
+class Arrays
+{
+    
+    public static function read($array, $key)
+    {
+        if(array_key_exists($key,$array))
+            return $array[$key];
+        else
+            return null;
+    }
+	
+	/** TODO: Write tests for this */
+	public static function parse_into_named_array($named_elements,$arg_list)
+	{
+		$parsed = array();
+		foreach($named_elements as $index=>$arg)
+		{
+			if(count($arg_list) > $index)
+			{
+				$parsed[$arg] = $arg_list[$index];
+			}
+			else
+			{
+				$parsed[$arg] = null;
+			}
+		}
+		return $parsed;
+	}
+	
+	/* This parses through an array to avoid the array key does not exist warning
+	 * IE $array['key1']['key2']['key3'].  If Key 2 doesn't exist then an error is thrown
+	 * this will go through the array in a legit way and make sure shit works right
+	 * Is the old Data::value function
+	 * */
+	public static function through_keys($variable, $array = array())
+	{
+
+		$value = $variable;
+		foreach($array AS $key)
+		{
+			if(isset($value[$key]))
+			{
+				$value = $value[$key];
+			}
+			else
+			{
+				return NULL;
+			}
+		}
+
+		 return Data::exists($value) ? $value : NULL;
+
+	}
+    
+    /**
+     * Property can be both a straight up property name, or a callable function
+     */
+    public static function list_elements_by_a_property($object_array,$property)
+    {
+        $array = array();
+        
+        if(is_callable($property))
+        {
+            foreach($object_array as $object)
+            {
+                $array[$property($object)] = $object;
+            }
+        }
+        else
+        {
+            foreach($object_array as $object)
+            {
+                $array[$object->$property] = $object;
+            }
+        }
+        
+        return $array;
+    }
+	
+	public static function group_by($array, $group_by)
+	{
+		$grouped_array = array();
+		
+		if(is_callable($group_by))
+        {
+            foreach($array as $subject)
+            {
+            	$group = $group_by($subject);
+            	if(!isset($grouped_array[$group]))
+				{
+					$grouped_array[$group] = array();
+				}
+				$grouped_array[$group][] = $subject;
+            }
+        }
+		else
+		{
+			foreach($array as $value)
+			{
+				$group = $value[$group_by];
+				if(!isset($grouped_array[$group]))
+				{
+					$grouped_array[$group] = array();
+				}
+				$grouped_array[$group][] = $value;
+			}
+		}
+		return $grouped_array;
+	}
+    
 }
