@@ -495,6 +495,11 @@ class Model
 			{
 				$replaced[lcfirst(static::camelize($relationshipKey))] = $relationshipValue;
 			}
+			if(isset($replaced['source']))
+			{
+				$replaced['to'] = $replaced['source'];
+				unset($replaced['source']);
+			}
 			if(isset($replaced['through']) && !isset($replaced['to']))
 			{
 				$replaced['to'] = $relationship_name;

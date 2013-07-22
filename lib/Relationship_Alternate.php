@@ -180,7 +180,16 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		$this->relationshipName = $name;
 		
 		if(!isset($this->definedRelationship['className']))
-			$this->set_inferred_class_name();
+		{
+			if($this instanceof ThroughRelationship && isset($this->definedRelationship['to']))
+			{
+				
+			}
+			else
+			{
+				$this->set_inferred_class_name();
+			}
+		}
 		
 		if(!isset($this->definedRelationship['foreignKey']))
 		{
@@ -407,6 +416,8 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		if(isset($definition['conditions']))
 			$options['conditions'] = $definition['conditions'];
 		
+		$modelPrimaryKey = isset($definition['primaryKey'])?$definition['primaryKey']:$model::getPrimaryKeyField();
+		
 		if($this->type === self::BELONGS_TO_ONE)
 		{
 			$relationshipOptions['conditions'] = array(
@@ -426,7 +437,7 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 				throw new JDORelationshipException('Foreign Key not defined for this relationship');
 			}
 			$relationshipOptions['conditions'] = array(
-				$definition['foreignKey']=>$this->model->{$model::getPrimaryKeyField()}
+				$definition['foreignKey']=>$this->model->{$modelPrimaryKey}
 			);
 			$scope = $class::scoped();
 			if(isset($options))
@@ -526,7 +537,6 @@ class ThroughRelationship extends Relationship
 			//Guess the to to be the same as the through
 			$this->definedRelationship['to'] = $this->definedRelationship['through'];
 		}
-		
 		$definition = $this->definedRelationship;
 		$parentRelationship = $definition['through'];
 		
@@ -535,6 +545,14 @@ class ThroughRelationship extends Relationship
 		{
 			throw new HasManyThroughAssociationException();
 		}
+		$normal_scope = $relationship->establishScope();
+		
+		if(isset($definition['conditions']))
+		{
+			$options['conditions'] = $definition['conditions'];
+			$normal_scope->add_scope($options);
+		}
+		
 		$models = $relationship->lazyLoadRelationship();
 		if(!is_array($models))
 		{
@@ -602,23 +620,24 @@ class EagerRelationship extends Relationship
 			$this->completedSession = true;
 			return $sampleRelationship->lazyLoadRelationship();
 		}
-		
 		if(isset($definedRelationship['order']))
 			$options['order'] = $definedRelationship['order'];
 		if(isset($definedRelationship['select']))
 			$options['select'] = $definedRelationship['select'];
 		if(isset($definedRelationship['readonly']))
 			$options['readonly'] = $definedRelationship['readonly'];
+		if(isset($definedRelationship['conditions']))
+			$options['conditions'] = $definedRelationship['conditions'];
 		
 		if($sampleRelationship->type == self::HAS_MANY || $sampleRelationship->type == self::HAS_ONE)
 		{
 			$keys = Arrays::list_elements_by_a_property($this->models, $class::getPrimaryKeyField());
 			$keys = array_keys($keys);
 			
-			$options['conditions'] = array($definedRelationship['foreignKey'].' IN (?)',$keys);
+			$relationshipOptions['conditions'] = array($definedRelationship['foreignKey'].' IN (?)',$keys);
 			$options['include'] = $this->includes;
 			$this->scope = $definedRelationship['className']::scoped()
-				->add_scope($options);
+				->add_scope($options)->add_scope($relationshipOptions);
 			$results = $this->scope->all();
 			foreach($results as $key=>$result)
 			{
@@ -626,8 +645,8 @@ class EagerRelationship extends Relationship
 				$this->results[$foreignValue][] = ModelCacher::useCachedModel($result);
 			}
 			//$this->results = \Arrays::group_by($results, $definedRelationship['foreignKey']);
-			
-			$primaryKeyField = $definedRelationship['className']::getPrimaryKeyField();
+			//$primaryKeyField = $definedRelationship['className']::getPrimaryKeyField();
+			$primaryKeyField = $definedRelationship['primaryKey'];
 			foreach($this->models as $key=>$model)
 			{
 				$relationship = $model->hasRelationship($relationName);
@@ -643,11 +662,11 @@ class EagerRelationship extends Relationship
 			$keys = Arrays::list_elements_by_a_property($this->models, $definedRelationship['foreignKey']);
 			$keys = array_keys($keys);
 			
-			$options['conditions'] = array($definedRelationship['className']::getPrimaryKeyField().' IN (?)',$keys);
+			$relationshipOptions['conditions'] = array($definedRelationship['className']::getPrimaryKeyField().' IN (?)',$keys);
 			$options['include'] = $this->includes;
 			
 			$this->scope = $definedRelationship['className']::scoped()
-				->add_scope($options);
+				->add_scope($options)->add_scope($relationshipOptions);
 				
 			$results = $this->scope->all();
 			$primaryKeyField = $definedRelationship['className']::getPrimaryKeyField();
