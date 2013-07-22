@@ -549,7 +549,7 @@ class ThroughRelationship extends Relationship
 			}
 			$throughDefinition = $throughRelationship->definedRelationship;
 			$throughClass = $throughDefinition['className'];
-			$eager = new EagerRelationship(get_class($models[0]),$models,null);
+			$eager = new EagerRelationship($this->relationshipName, get_class($models[0]),$models,null);
 			$eager->executeEagerLoad($definition['to'],$throughRelationship);
 			$relations = array_values($eager->loadedRelationship);
 			$this->scope = $eager->scope;
