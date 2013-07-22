@@ -20,7 +20,7 @@ class RelationshipTest extends DatabaseTest
 		parent::set_up($connection_name);
 
 		Event::$belongs_to = array(array('venue'), array('host'));
-		Venue::$has_many = array(array('events', 'order' => 'id asc'),array('hosts', 'through' => 'events','to'=>'host', 'order' => 'hosts.id asc'));
+		Venue::$has_many = array(array('events', 'order' => 'id asc'),array('hosts', 'through' => 'events','source'=>'host', 'order' => 'hosts.id asc'));
 		Venue::$has_one = array();
 		Employee::$has_one = array(array('position'));
 		Host::$has_many = array(array('events', 'order' => 'id asc'));
@@ -356,7 +356,7 @@ class RelationshipTest extends DatabaseTest
 	{
 		return true;
 		Event::$belongs_to = array(array('host'));
-		Venue::$has_many[1] = array('hosts', 'through' => 'events', 'select' => 'hosts.*, events.*','to'=>'host');
+		Venue::$has_many[1] = array('hosts', 'through' => 'events', 'select' => 'hosts.*, events.*','source'=>'host');
 
 		$venue = $this->get_relationship();
 		$this->assert_true(count($venue->hosts) > 0);
@@ -366,7 +366,7 @@ class RelationshipTest extends DatabaseTest
 	public function test_has_many_through_with_conditions()
 	{
 		Event::$belongs_to = array(array('host'));
-		Venue::$has_many[1] = array('hosts', 'through' => 'events','to'=>'host', 'conditions' => array('events.title != ?', 'Love Overboard'));
+		Venue::$has_many[1] = array('hosts', 'through' => 'events','source'=>'host', 'conditions' => array('events.title != ?', 'Love Overboard'));
 
 		$venue = $this->get_relationship();
 		$venue->hosts;
