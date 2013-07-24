@@ -467,7 +467,7 @@ class Model
 	{
 		if($this->relationships === null)
 		{
-			$this->relationships = new \ActiveRecord\Relationships($this);
+			$this->relationships = new Relationships($this);
 		}
 		$relationship = $this->relationships->hasRelationship($name);
 		if($relationship)
@@ -561,7 +561,7 @@ class Model
 		$table = static::table();
 
 		// this may be first access to the relationship so check Table
-		if(class_exists('\ActiveRecord\Relationships',false))
+		if(Config::instance()->use_scoped_relationships())
 		{
 			if($relationship = $this->hasRelationship($name))
 			{

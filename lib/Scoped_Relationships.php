@@ -269,7 +269,10 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		}
 		else if(!$this->hasOneResult() && !is_array($relationship))
 		{
-			$this->loadedRelationship = array($relationship);
+			if($relationship)
+				$this->loadedRelationship = array($relationship);
+			else
+				$this->loadedRelationship = array();
 		}
 		else
 			$this->loadedRelationship = $relationship;
@@ -295,7 +298,7 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		return $this->type === self::BELONGS_TO_ONE || $this->type == self::HAS_ONE;
 	}
 	
-	private $hasLoadedTheRelationship = false;
+	protected $hasLoadedTheRelationship = false;
 	public function lazyLoadRelationship()
 	{
 		if($this->hasLoadedTheRelationship)
@@ -527,7 +530,7 @@ class ThroughRelationship extends Relationship
 	
 	public function lazyLoadRelationship()
 	{
-		if($this->loadedRelationship !== null)
+		if($this->hasLoadedTheRelationship)
 		{
 			return $this->loadedRelationship;
 		}
@@ -573,6 +576,10 @@ class ThroughRelationship extends Relationship
 			$this->scope = $eager->scope;
 			return $this->setRelationship($relations);
 			/** Need to set this loadedRelationship **/
+		}
+		else
+		{
+			return $this->setRelationship(null);
 		}
 		
 	}
@@ -646,7 +653,7 @@ class EagerRelationship extends Relationship
 			}
 			//$this->results = \Arrays::group_by($results, $definedRelationship['foreignKey']);
 			//$primaryKeyField = $definedRelationship['className']::getPrimaryKeyField();
-			$primaryKeyField = $definedRelationship['primaryKey'];
+			$primaryKeyField = isset($definedRelationship['primaryKey'])?$definedRelationship['primaryKey']:$definedRelationship['className']::getPrimaryKeyField();
 			foreach($this->models as $key=>$model)
 			{
 				$relationship = $model->hasRelationship($relationName);
