@@ -16,7 +16,7 @@ class RelationshipTest extends DatabaseTest
 
 	public function set_up($connection_name=null)
 	{
-		require_once(PHP_ACTIVERECORD_ROOT.'/lib/Relationship_Alternate.php');
+		\ActiveRecord\Config::instance()->use_scoped_relationships(true);
 		parent::set_up($connection_name);
 
 		Event::$belongs_to = array(array('venue'), array('host'));
