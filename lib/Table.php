@@ -229,7 +229,7 @@ class Table
 
 			$list[] = $model;
 		}
-		if(class_exists('\ActiveRecord\Relationships',false))
+		if(Config::instance()->use_scoped_relationships())
 		{
 			if ($collect_attrs_for_includes && !empty($list))
 				Relationships::executeEagerLoad($this->class->name,$list,$includes);

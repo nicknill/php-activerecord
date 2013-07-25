@@ -183,7 +183,8 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		{
 			if($this instanceof ThroughRelationship && isset($this->definedRelationship['to']))
 			{
-				
+				$this->relationshipName = $this->definedRelationship['to'];
+				$this->set_inferred_class_name();
 			}
 			else
 			{
@@ -215,6 +216,27 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 			$this->definedRelationship['primaryKey'] = Table::load($model_class_name)->pk;
 			$this->definedRelationship['primaryKey'] = $this->definedRelationship['primaryKey'][0];
 		}
+	}
+	
+	protected function extractFinderOptionsFromDefinition($definition = null)
+	{
+		$acceptableOptions = array(
+			'select','order','readonly','conditions','group','limit','offset'
+		);
+		$options = array();
+		if($definition === null)
+		{
+			$definition = $this->definedRelationship;
+		}
+		foreach($acceptableOptions as $optionName)
+		{
+			if(isset($definition[$optionName]))
+			{
+				$options[$optionName] = $definition[$optionName];
+			}
+		}
+		if($options)
+			return $options;
 	}
 	
 	protected function set_inferred_class_name()
@@ -269,10 +291,31 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		}
 		else if(!$this->hasOneResult() && !is_array($relationship))
 		{
-			if($relationship)
-				$this->loadedRelationship = array($relationship);
+			if(is_array($relationship))
+			{
+				if(is_array(reset($relationship)))
+				{
+					var_dump('here');
+					$this->loadedRelationship = reset($relationship);
+				}
+				else
+				{
+					$this->loadedRelationship = $relationship;
+				}
+			}
 			else
-				$this->loadedRelationship = array();
+			{
+				if($relationship)
+				{
+					var_dump('hm');
+					$this->loadedRelationship = array($relationship);
+				}
+				else
+				{
+					var_dump('hm2');
+					$this->loadedRelationship = array();
+				}
+			}
 		}
 		else
 			$this->loadedRelationship = $relationship;
@@ -408,16 +451,9 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 		{
 			$class = $definition['className'];
 		}
-		
+
 		$model = $this->model;
-		if(isset($definition['select']))
-			$options['select'] = $definition['select'];
-		if(isset($definition['order']))
-			$options['order'] = $definition['order'];
-		if(isset($definition['readonly']))
-			$options['readonly'] = $definition['readonly'];
-		if(isset($definition['conditions']))
-			$options['conditions'] = $definition['conditions'];
+		$options = $this->extractFinderOptionsFromDefinition();
 		
 		$modelPrimaryKey = isset($definition['primaryKey'])?$definition['primaryKey']:$model::getPrimaryKeyField();
 		
@@ -427,7 +463,7 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 				$class::getPrimaryKeyField()=>$model->{$definition['foreignKey']}
 			);
 			$scope = $class::scoped();
-			if(isset($options))
+			if($options)
 			{
 				$scope = $scope->add_scope($options);
 			}
@@ -443,7 +479,7 @@ class Relationship implements \Countable, \IteratorAggregate, \ArrayAccess
 				$definition['foreignKey']=>$this->model->{$modelPrimaryKey}
 			);
 			$scope = $class::scoped();
-			if(isset($options))
+			if($options)
 			{
 				$scope = $scope->add_scope($options);
 			}
@@ -550,11 +586,11 @@ class ThroughRelationship extends Relationship
 		}
 		$normal_scope = $relationship->establishScope();
 		
-		if(isset($definition['conditions']))
-		{
-			$options['conditions'] = $definition['conditions'];
-			$normal_scope->add_scope($options);
-		}
+		$options = $this->extractFinderOptionsFromDefinition();
+		// if($options)
+		// {
+			// $normal_scope->add_scope($options);
+		// }
 		
 		$models = $relationship->lazyLoadRelationship();
 		if(!is_array($models))
@@ -572,8 +608,20 @@ class ThroughRelationship extends Relationship
 			$throughClass = $throughDefinition['className'];
 			$eager = new EagerRelationship($this->relationshipName, get_class($models[0]),$models,null);
 			$eager->executeEagerLoad($definition['to'],$throughRelationship);
-			$relations = array_values($eager->loadedRelationship);
+			if(is_array($eager->loadedRelationship) && is_array(reset($eager->loadedRelationship)))
+			{
+				$relations = array_values(reset($eager->loadedRelationship));
+			}
+			else
+			{
+				$relations = array_values($eager->loadedRelationship);
+			}
 			$this->scope = $eager->scope;
+			/** For THROUGH relationship specific options */
+			if($options)
+			{
+				$this->scope->add_scope($options);
+			}
 			return $this->setRelationship($relations);
 			/** Need to set this loadedRelationship **/
 		}
@@ -627,14 +675,8 @@ class EagerRelationship extends Relationship
 			$this->completedSession = true;
 			return $sampleRelationship->lazyLoadRelationship();
 		}
-		if(isset($definedRelationship['order']))
-			$options['order'] = $definedRelationship['order'];
-		if(isset($definedRelationship['select']))
-			$options['select'] = $definedRelationship['select'];
-		if(isset($definedRelationship['readonly']))
-			$options['readonly'] = $definedRelationship['readonly'];
-		if(isset($definedRelationship['conditions']))
-			$options['conditions'] = $definedRelationship['conditions'];
+		
+		$options = $this->extractFinderOptionsFromDefinition($definedRelationship);
 		
 		if($sampleRelationship->type == self::HAS_MANY || $sampleRelationship->type == self::HAS_ONE)
 		{
@@ -671,7 +713,6 @@ class EagerRelationship extends Relationship
 			
 			$relationshipOptions['conditions'] = array($definedRelationship['className']::getPrimaryKeyField().' IN (?)',$keys);
 			$options['include'] = $this->includes;
-			
 			$this->scope = $definedRelationship['className']::scoped()
 				->add_scope($options)->add_scope($relationshipOptions);
 				

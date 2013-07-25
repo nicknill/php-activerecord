@@ -16,8 +16,8 @@ class RelationshipTest extends DatabaseTest
 
 	public function set_up($connection_name=null)
 	{
-		\ActiveRecord\Config::instance()->use_scoped_relationships(true);
 		parent::set_up($connection_name);
+		\ActiveRecord\Config::instance()->use_scoped_relationships(false);
 
 		Event::$belongs_to = array(array('venue'), array('host'));
 		Venue::$has_many = array(array('events', 'order' => 'id asc'),array('hosts', 'through' => 'events','source'=>'host', 'order' => 'hosts.id asc'));
@@ -25,6 +25,7 @@ class RelationshipTest extends DatabaseTest
 		Employee::$has_one = array(array('position'));
 		Host::$has_many = array(array('events', 'order' => 'id asc'));
 		
+		\Logger::clear();
 		foreach ($this->relationship_names as $name)
 		{
 			if (preg_match("/$name/", $this->getName(), $match))
@@ -212,7 +213,6 @@ class RelationshipTest extends DatabaseTest
 
 	public function test_has_many_build_association()
 	{
-		return true;
 		$author = Author::first();
 		$this->assert_equals($author->id, $author->build_books()->author_id);
 		$this->assert_equals($author->id, $author->build_book()->author_id);
@@ -317,16 +317,14 @@ class RelationshipTest extends DatabaseTest
 			'group'  => 'type',
 			'limit'  => 2,
 			'offset' => 1);
-		$events = Venue::first()->events;
-		$event = $events[0];
-		$this->assertTrue(!isset($event->host_id));
-		$this->assertTrue(isset($event->type));
-		//$this->assert_sql_has($this->conn->limit("SELECT type FROM events WHERE venue_id=? GROUP BY type",1,2),Event::table()->last_sql);
+		Venue::first()->events;
+		$this->assert_sql_has($this->conn->limit("SELECT type FROM events WHERE venue_id=? GROUP BY type",1,2),Event::table()->last_sql);
 	}
 
 	public function test_has_many_through()
 	{
 		$hosts = Venue::find(2)->hosts;
+		var_dump(\Logger::get_last_query());
 		$this->assert_equals(2,$hosts[0]->id);
 		$this->assert_equals(3,$hosts[1]->id);
 	}
@@ -364,12 +362,13 @@ class RelationshipTest extends DatabaseTest
 
 	public function test_has_many_through_with_select()
 	{
-		return true;
 		Event::$belongs_to = array(array('host'));
 		Venue::$has_many[1] = array('hosts', 'through' => 'events', 'select' => 'hosts.*, events.*','source'=>'host');
 
 		$venue = $this->get_relationship();
 		$this->assert_true(count($venue->hosts) > 0);
+		var_dump($venue->hosts);
+		var_dump(Logger::get_last_queries(0));
 		$this->assert_not_null($venue->hosts[0]->title);
 	}
 
@@ -539,7 +538,6 @@ class RelationshipTest extends DatabaseTest
 
 	public function test_gh93_and_gh100_eager_loading_respects_association_options()
 	{
-		return true;
 		Venue::$has_many = array(array('events', 'class_name' => 'Event', 'order' => 'id asc', 'conditions' => array('length(title) = ?', 14)));
 		$venues = Venue::find(array(2, 6), array('include' => 'events'));
 
@@ -678,7 +676,6 @@ class RelationshipTest extends DatabaseTest
 	public function test_eager_loading_clones_related_objects()
 	{
 		//Actually DO want them to not be cloned
-		return true;
 		$events = Event::find(array(2,3), array('include' => array('venue')));
 
 		$venue = $events[0]->venue;
@@ -692,7 +689,6 @@ class RelationshipTest extends DatabaseTest
 	public function test_eager_loading_clones_nested_related_objects()
 	{
 		//Actually DO want them to not be cloned
-		return true;
 		$venues = Venue::find(array(1,2,6,9), array('include' => array('events' => array('host'))));
 
 		$unchanged_host = $venues[2]->events[0]->host;
