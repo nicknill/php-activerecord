@@ -680,7 +680,8 @@ class EagerRelationship extends Relationship
 		
 		if($sampleRelationship->type == self::HAS_MANY || $sampleRelationship->type == self::HAS_ONE)
 		{
-			$keys = Arrays::list_elements_by_a_property($this->models, $class::getPrimaryKeyField());
+			$primaryKeyField = isset($definedRelationship['primaryKey'])?$definedRelationship['primaryKey']:$class::getPrimaryKeyField();
+			$keys = \Arrays::list_elements_by_a_property($this->models, $primaryKeyField);
 			$keys = array_keys($keys);
 			
 			$relationshipOptions['conditions'] = array($definedRelationship['foreignKey'].' IN (?)',$keys);
