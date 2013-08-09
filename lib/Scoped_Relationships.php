@@ -709,6 +709,7 @@ class EagerRelationship extends Relationship
 		}
 		if($sampleRelationship->type == self::BELONGS_TO_ONE)
 		{
+			/** TODO: Make sure this loads the correct information if user defines a custom primary Key*/
 			$keys = Arrays::list_elements_by_a_property($this->models, $definedRelationship['foreignKey']);
 			$keys = array_keys($keys);
 			
